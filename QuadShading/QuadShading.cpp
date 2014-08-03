@@ -1,9 +1,9 @@
 //--------------------------------------------------------------------------------------
-// File: PixelQuad.cpp
+// File: QuadShading.cpp
 //
-// This application demonstrates texturing
+// This application demonstrates a way to visualise pixel quad "overshading"
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) 2014 Stephen Hill
 //--------------------------------------------------------------------------------------
 #include <windows.h>
 #include <d3d11.h>

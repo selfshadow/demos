@@ -1,8 +1,8 @@
 
 //--------------------------------------------------------------------------------------
-// File: PixelQuad.fx
+// File: QuadShading.fx
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) 2014 Stephen Hill
 //--------------------------------------------------------------------------------------
 
 RWTexture2D<uint> lockUAV      : register(u0);
