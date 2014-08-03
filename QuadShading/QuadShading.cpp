@@ -609,7 +609,7 @@ void CleanupDevice()
     if (g_pSceneVertexShader) g_pSceneVertexShader->Release();
     if (g_pScenePixelShader) g_pScenePixelShader->Release();
     if (g_pSceneVertexLayout) g_pSceneVertexLayout->Release();
-    if (g_pScenePixelShader) g_pSceneDepthPixelShader->Release();
+    if (g_pSceneDepthPixelShader) g_pSceneDepthPixelShader->Release();
     if (g_pVisVertexShader) g_pVisVertexShader->Release();
     if (g_pVisPixelShader) g_pVisPixelShader->Release();
     if (g_pVisVertexLayout) g_pVisVertexLayout->Release();
