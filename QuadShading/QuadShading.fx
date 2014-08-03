@@ -75,7 +75,7 @@ void SceneDepthPS()
 
 //--------------------------------------------------------------------------------------
 [earlydepthstencil]
-void ScenePS(float4 vpos : SV_Position, float2 c0 : TEXCOORD0, uint id : SV_PrimitiveID)
+void ScenePS(float4 vpos : SV_Position, uint id : SV_PrimitiveID)
 {
     uint2 quad = vpos.xy*0.5;
     uint  prevID;
@@ -125,7 +125,7 @@ bool InsideTri(float2 c)
 }
 
 [earlydepthstencil]
-void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0, uint id : SV_PrimitiveID)
+void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0)
 {
     uint2 p = uint2(vpos.xy) & 1;
     float2 sign = p ? -1 : 1;
