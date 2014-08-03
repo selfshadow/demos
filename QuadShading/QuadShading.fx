@@ -140,10 +140,9 @@ void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0, uint id : SV_Pri
 
     uint index = p.x + (p.y << 1);
 
-    bool firstAlive = true;
-    if (index == 1) firstAlive = !i1;
-    if (index == 2) firstAlive = !i2 && !i3;
-    if (index == 3) firstAlive = !i1 && !i2 && !i3;
+    uint firstAlive = 1;
+    if (index & 1) firstAlive &= !i1;
+    if (index & 2) firstAlive &= !i2 && !i3;
 
     if (firstAlive)
     {
