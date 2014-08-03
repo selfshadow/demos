@@ -75,7 +75,7 @@ void SceneDepthPS(PSINPUT input)
 
 //--------------------------------------------------------------------------------------
 [earlydepthstencil]
-void ScenePS(float4 vpos : SV_Position, float2 c0 : TEXCOORD0, uint id : SV_PrimitiveID)
+void ScenePS1(float4 vpos : SV_Position, float2 unused : TEXCOORD0, uint id : SV_PrimitiveID)
 {
     uint2 quad = vpos.xy*0.5;
     uint  prevID;
@@ -133,6 +133,51 @@ void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0)
 
     // Perform triangle inclusion test for the pixel
     bool i0 = InsideTri(c0);
+
+    // Assign an index within the quad:
+    // 0 1
+    // 2 3
+    uint index = p.x + (p.y << 1);
+
+    // Form a bit mask
+    uint b0 = i0 << index;
+
+    // Retrieve test results for other pixels in the quad. For more details, see:
+    // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.
+    int2 sign = p ? -1 : 1;
+    uint b1 = b0 + sign.x*ddx_fine(b0);
+    uint b2 = b0 + sign.y*ddy_fine(b0);
+    uint b3 = b2 + sign.x*ddx_fine(b2);
+
+    // Combine the results
+    uint bitmask = b0 | b1 | b2 | b3;
+
+    // Check if all pixels with a lower index are outside of the triangle (i.e., 'dead')
+    uint firstAlive = firstbitlow(bitmask) == index;
+
+    // If we're the first live pixel, increment the quad count and update the
+    // 'liveness' stats (number of quads with 1-4 live pixels)
+    if (firstAlive)
+    {
+        uint2 quad = vpos.xy*0.5;
+        InterlockedAdd(overdrawUAV[quad], 1);
+
+        // Note: storing count - 1, for consistency with previous method
+        uint pixelCount = countbits(bitmask) - 1;
+        InterlockedAdd(liveStatsUAV[pixelCount], 1);
+    }
+}
+
+//--------------------------------------------------------------------------------------
+[earlydepthstencil]
+void ScenePS3(float4 vpos : SV_Position, float2 unused : TEXCOORD0, uint c0 : SV_Coverage)
+{
+    // Lowest bit of the x and y coordinates, used to adjust the the direction of
+    // derivatives and assign the pixel an index within the quad
+    uint2 p = uint2(vpos.xy) & 1;
+
+    // Perform triangle inclusion test for the pixel
+    bool i0 = c0 != 0;
 
     // Assign an index within the quad:
     // 0 1
