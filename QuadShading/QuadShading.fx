@@ -69,13 +69,13 @@ void SceneGS(triangle GSINPUT input[3], inout TriangleStream<PSINPUT> output,
 }
 
 //--------------------------------------------------------------------------------------
-void SceneDepthPS()
+void SceneDepthPS(PSINPUT input)
 {
 }
 
 //--------------------------------------------------------------------------------------
 [earlydepthstencil]
-void ScenePS(float4 vpos : SV_Position, uint id : SV_PrimitiveID)
+void ScenePS(float4 vpos : SV_Position, float2 c0 : TEXCOORD0, uint id : SV_PrimitiveID)
 {
     uint2 quad = vpos.xy*0.5;
     uint  prevID;
