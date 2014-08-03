@@ -176,16 +176,13 @@ void ScenePS3(float4 vpos : SV_Position, float2 unused : TEXCOORD0, uint c0 : SV
     // derivatives and assign the pixel an index within the quad
     uint2 p = uint2(vpos.xy) & 1;
 
-    // Perform triangle inclusion test for the pixel
-    bool i0 = c0 != 0;
-
     // Assign an index within the quad:
     // 0 1
     // 2 3
     uint index = p.x + (p.y << 1);
 
-    // Form a bit mask
-    uint b0 = i0 << index;
+    // Store the coverage in the appropriate bit
+    uint b0 = c0 << index;
 
     // Retrieve test results for other pixels in the quad. For more details, see:
     // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.
@@ -194,7 +191,7 @@ void ScenePS3(float4 vpos : SV_Position, float2 unused : TEXCOORD0, uint c0 : SV
     uint b2 = b0 + sign.y*ddy_fine(b0);
     uint b3 = b2 + sign.x*ddx_fine(b2);
 
-    // Combine the results
+    // Combine the coverage results
     uint bitmask = b0 | b1 | b2 | b3;
 
     // Check if all pixels with a lower index are outside of the triangle (i.e., 'dead')
