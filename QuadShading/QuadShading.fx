@@ -139,7 +139,7 @@ void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0)
     float2 c2 = c0 + sign.y*ddy_fine(c0);
     float2 c3 = c2 + sign.x*ddx_fine(c2);
 
-    // Perform triangle inclusion tests for the neighbours.
+    // Perform triangle inclusion tests for the neighbours
     bool i1 = InsideTri(c1);
     bool i2 = InsideTri(c2);
     bool i3 = InsideTri(c3);
