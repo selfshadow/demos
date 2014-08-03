@@ -1,7 +1,7 @@
 //--------------------------------------------------------------------------------------
 // File: QuadShading.cpp
 //
-// This application demonstrates a way to visualise pixel quad "overshading"
+// This application demonstrates a couple of ways to visualise pixel quad "overshading"
 //
 // Copyright (c) 2014 Stephen Hill
 //--------------------------------------------------------------------------------------
@@ -50,7 +50,9 @@ ID3D11RenderTargetView*    g_pRenderTargetView = NULL;
 ID3D11Texture2D*           g_pDepthStencil = NULL;
 ID3D11DepthStencilView*    g_pDepthStencilView = NULL;
 ID3D11VertexShader*        g_pSceneVertexShader = NULL;
+ID3D11GeometryShader*      g_pSceneGeometryShader = NULL;
 ID3D11PixelShader*         g_pScenePixelShader = NULL;
+ID3D11PixelShader*         g_pScenePixelShader2 = NULL;
 ID3D11InputLayout*         g_pSceneVertexLayout = NULL;
 ID3D11PixelShader*         g_pSceneDepthPixelShader = NULL;
 ID3D11VertexShader*        g_pVisVertexShader = NULL;
@@ -88,6 +90,8 @@ ID3D11ShaderResourceView*  g_pLiveCountSRV = NULL;
 ID3D11Texture1D*           g_pLiveStatsBuffer = NULL;
 ID3D11UnorderedAccessView* g_pLiveStatsUAV = NULL;
 ID3D11ShaderResourceView*  g_pLiveStatsSRV = NULL;
+
+BOOL                       g_bBarycentricMethod = FALSE;
 
 CDXUTSDKMesh g_Mesh;
 CModelViewerCamera g_Camera;
@@ -377,6 +381,7 @@ HRESULT InitDevice()
     UINT numElements = ARRAYSIZE(layout);
 
     ID3DBlob* pVSBlob = NULL;
+    ID3DBlob* pGSBlob = NULL;
     ID3DBlob* pPSBlob = NULL;
 
     // Compile the vertex shader
@@ -395,10 +400,26 @@ HRESULT InitDevice()
     if (FAILED(hr))
         return hr;
 
+    hr = CompileShaderFromFile(L"QuadShading.fx", "SceneGS", "gs_5_0", &pGSBlob);
+    if (FAILED(hr))
+        return hr;
+    hr = g_pd3dDevice->CreateGeometryShader(pGSBlob->GetBufferPointer(), pGSBlob->GetBufferSize(), NULL, &g_pSceneGeometryShader);
+    pGSBlob->Release();
+    if (FAILED(hr))
+        return hr;
+
     hr = CompileShaderFromFile(L"QuadShading.fx", "ScenePS", "ps_5_0", &pPSBlob);
     if (FAILED(hr))
         return hr;
     hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), NULL, &g_pScenePixelShader);
+    pPSBlob->Release();
+    if (FAILED(hr))
+        return hr;
+
+    hr = CompileShaderFromFile(L"QuadShading.fx", "ScenePS2", "ps_5_0", &pPSBlob);
+    if (FAILED(hr))
+        return hr;
+    hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), NULL, &g_pScenePixelShader2);
     pPSBlob->Release();
     if (FAILED(hr))
         return hr;
@@ -607,7 +628,9 @@ void CleanupDevice()
     if (g_pQuadVertexBuffer) g_pQuadVertexBuffer->Release();
     if (g_pQuadIndexBuffer) g_pQuadIndexBuffer->Release();
     if (g_pSceneVertexShader) g_pSceneVertexShader->Release();
+    if (g_pSceneGeometryShader) g_pSceneGeometryShader->Release();
     if (g_pScenePixelShader) g_pScenePixelShader->Release();
+    if (g_pScenePixelShader2) g_pScenePixelShader2->Release();
     if (g_pSceneVertexLayout) g_pSceneVertexLayout->Release();
     if (g_pSceneDepthPixelShader) g_pSceneDepthPixelShader->Release();
     if (g_pVisVertexShader) g_pVisVertexShader->Release();
@@ -664,6 +687,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
         case WM_DESTROY:
             PostQuitMessage(0);
+            break;
+
+        case WM_KEYDOWN:
+            if (wParam == VK_SPACE)
+                g_bBarycentricMethod ^= 1;
             break;
 
         default:
@@ -793,6 +821,8 @@ void Render()
     g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_pCBChangesEveryFrame);
     g_pImmediateContext->PSSetShader(g_pSceneDepthPixelShader, NULL, 0);
 
+    g_pImmediateContext->GSSetShader(g_pSceneGeometryShader, NULL, 0);
+
     // Depth pass
     g_pImmediateContext->RSSetState(g_sceneRS);
     g_pImmediateContext->OMSetDepthStencilState(g_sceneDepthDS, 0);
@@ -802,7 +832,8 @@ void Render()
         RenderMesh(g_pImmediateContext, &g_Mesh, i, 2);
 
     // Fragments pass
-    g_pImmediateContext->PSSetShader(g_pScenePixelShader, NULL, 0);
+    ID3D11PixelShader* ps = g_bBarycentricMethod ? g_pScenePixelShader2 : g_pScenePixelShader;
+    g_pImmediateContext->PSSetShader(ps, NULL, 0);
     g_pImmediateContext->PSSetShaderResources(0, 1, &g_pDummySRV);
     g_pImmediateContext->PSSetShaderResources(1, 1, &g_pDummySRV);
 
@@ -819,6 +850,8 @@ void Render()
         RenderMesh(g_pImmediateContext, &g_Mesh, i, 2);
 
     g_pImmediateContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &g_pRenderTargetView, g_pDepthStencilView, 0, 0, NULL, NULL);
+
+    g_pImmediateContext->GSSetShader(NULL, NULL, 0);
 
     //
     // Render the quad

@@ -10,8 +10,8 @@ RWTexture2D<uint> overdrawUAV  : register(u1);
 RWTexture2D<uint> liveCountUAV : register(u2);
 RWTexture1D<uint> liveStatsUAV : register(u3);
 
-Texture2D<uint> overdrawSRV  : register(t0);
-Texture1D<uint> liveStatsSRV : register(t1);
+Texture2D<uint>   overdrawSRV  : register(t0);
+Texture1D<uint>   liveStatsSRV : register(t1);
 
 
 //--------------------------------------------------------------------------------------
@@ -30,22 +30,52 @@ cbuffer cbChangesEveryFrame : register(b1)
 
 
 //--------------------------------------------------------------------------------------
-float4 SceneVS(float4 pos : POSITION) : SV_POSITION
+struct GSINPUT
+{
+    float4 cpos : SV_POSITION;
+};
+
+struct PSINPUT
+{
+    float4 cpos : SV_POSITION;
+    float2 col  : TEXCOORD0;
+    uint   id   : SV_PrimitiveID;
+};
+
+
+GSINPUT SceneVS(float4 wpos : POSITION)
 {
     float4 cpos;
-    cpos = mul( pos, View);
+    cpos = mul(wpos, View);
     cpos = mul(cpos, Projection);
 
-    return cpos;
+    GSINPUT output;
+    output.cpos = cpos;
+
+    return output;
 }
 
+
+[maxvertexcount(3)]
+void SceneGS(triangle GSINPUT input[3], inout TriangleStream<PSINPUT> output, 
+             uint id : SV_PrimitiveID)
+{
+    PSINPUT p;
+    p.id   = id;
+    p.cpos = input[0].cpos; p.col = float2(1, 0); output.Append(p);
+    p.cpos = input[1].cpos; p.col = float2(0, 1); output.Append(p);
+    p.cpos = input[2].cpos; p.col = float2(0, 0); output.Append(p);
+    output.RestartStrip();
+}
+
+//--------------------------------------------------------------------------------------
 void SceneDepthPS()
 {
 }
 
-
+//--------------------------------------------------------------------------------------
 [earlydepthstencil]
-void ScenePS(float4 vpos : SV_Position, uint id : SV_PrimitiveID)
+void ScenePS(float4 vpos : SV_Position, float2 c0 : TEXCOORD0, uint id : SV_PrimitiveID)
 {
     uint2 quad = vpos.xy*0.5;
     uint  prevID;
@@ -88,6 +118,43 @@ void ScenePS(float4 vpos : SV_Position, uint id : SV_PrimitiveID)
     }
 }
 
+//--------------------------------------------------------------------------------------
+bool InsideTri(float2 c)
+{
+    return c.x >= 0 && c.y >= 0 && (c.x + c.y <= 1);
+}
+
+[earlydepthstencil]
+void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0, uint id : SV_PrimitiveID)
+{
+    uint2 p = uint2(vpos.xy) & 1;
+    float2 sign = p ? -1 : 1;
+
+    float2 c1 = c0 + sign.x*ddx_fine(c0);
+    float2 c2 = c0 + sign.y*ddy_fine(c0);
+    float2 c3 = c2 + sign.x*ddx_fine(c2);
+
+    bool i1 = InsideTri(c1);
+    bool i2 = InsideTri(c2);
+    bool i3 = InsideTri(c3);
+
+    uint index = p.x + (p.y << 1);
+
+    bool firstAlive = true;
+    if (index == 1) firstAlive = !i1;
+    if (index == 2) firstAlive = !i2 && !i3;
+    if (index == 3) firstAlive = !i1 && !i2 && !i3;
+
+    if (firstAlive)
+    {
+        uint2 quad = vpos.xy*0.5;
+        InterlockedAdd(overdrawUAV[quad], 1);
+
+        uint pixelCount = i1 + i2 + i3;
+        InterlockedAdd(liveStatsUAV[pixelCount], 1);
+    }
+}
+
 
 //--------------------------------------------------------------------------------------
 float4 VisVS(float4 pos : POSITION) : SV_Position
@@ -116,7 +183,6 @@ float4 ToColour(uint v)
     return colours[min(v, nbColours - 1)]/255.0;
 }
 
-
 float4 PieChart(float2 quad)
 {
     float t4 = liveStatsSRV[3];
@@ -139,7 +205,6 @@ float4 PieChart(float2 quad)
 
     return colour;
 }
-
 
 float4 VisPS(float4 vpos : SV_POSITION) : SV_Target
 {
