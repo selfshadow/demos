@@ -127,23 +127,37 @@ bool InsideTri(float2 c)
 [earlydepthstencil]
 void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0)
 {
+    // Lowest bits of x and y coordinates, used to adjust the the direction of
+    // derivatives and assign the pixel an index within the quad
     uint2 p = uint2(vpos.xy) & 1;
-    float2 sign = p ? -1 : 1;
 
+    // Retrieve the barycentric coordinates of the other pixels
+    // in the quad. For more details, see:
+    // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.
+    float2 sign = p ? -1 : 1;
     float2 c1 = c0 + sign.x*ddx_fine(c0);
     float2 c2 = c0 + sign.y*ddy_fine(c0);
     float2 c3 = c2 + sign.x*ddx_fine(c2);
 
+    // Perform triangle inclusion tests for the neighbours.
     bool i1 = InsideTri(c1);
     bool i2 = InsideTri(c2);
     bool i3 = InsideTri(c3);
 
+    // Assign an index within the quad:
+    // 0 1
+    // 2 3
     uint index = p.x + (p.y << 1);
 
+    // Check if all pixels with a lower index are outside of the triangle (i.e. 'dead')
     uint firstAlive = 1;
     if (index & 1) firstAlive &= !i1;
     if (index & 2) firstAlive &= !i2 && !i3;
 
+    // If we're the first live pixel, increment the quad count and update the
+    // 'liveness' stats (number of quads with 1-4 live pixels)
+    // Note: we don't need to test the liveness of the pixel itself, because writes
+    // will fail if it's dead!
     if (firstAlive)
     {
         uint2 quad = vpos.xy*0.5;
