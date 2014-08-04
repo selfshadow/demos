@@ -10,8 +10,8 @@ RWTexture2DArray<uint> overdrawUAV  : register(u1);
 RWTexture2D<uint>      liveCountUAV : register(u2);
 RWTexture1D<uint>      liveStatsUAV : register(u3);
 
-Texture2DArray<uint> overdrawSRV  : register(t0);
-Texture1D<uint>      liveStatsSRV : register(t1);
+Texture2DArray<uint>   overdrawSRV  : register(t0);
+Texture1D<uint>        liveStatsSRV : register(t1);
 
 
 //--------------------------------------------------------------------------------------
@@ -212,9 +212,9 @@ void ScenePS3(float4 vpos : SV_Position, uint c0 : SV_Coverage)
 [earlydepthstencil]
 void ScenePS4(float4 vpos : SV_Position, uint c0 : SV_Coverage)
 {
-    // Obtain coverage for all pixels in the quad.
-    // This uses quad 'message passing'. For more details, see:
-    // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.
+    // Obtain coverage for all pixels in the quad, via 'message passing'*.
+    // (* For more details, see:
+    // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.)
     uint2 p = uint2(vpos.xy) & 1;
     int2 sign = p ? -1 : 1;
     uint c1 = c0 + sign.x*ddx_fine(c0);
