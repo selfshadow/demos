@@ -162,7 +162,6 @@ void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0)
         uint2 quad = vpos.xy*0.5;
         InterlockedAdd(overdrawUAV[quad], 1);
 
-        // Note: storing count - 1, for consistency with previous method
         uint pixelCount = countbits(bitmask) - 1;
         InterlockedAdd(liveStatsUAV[pixelCount], 1);
     }
@@ -204,7 +203,6 @@ void ScenePS3(float4 vpos : SV_Position, float2 unused : TEXCOORD0, uint c0 : SV
         uint2 quad = vpos.xy*0.5;
         InterlockedAdd(overdrawUAV[quad], 1);
 
-        // Note: storing count - 1, for consistency with previous method
         uint pixelCount = countbits(bitmask) - 1;
         InterlockedAdd(liveStatsUAV[pixelCount], 1);
     }
