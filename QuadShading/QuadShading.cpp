@@ -54,10 +54,12 @@ ID3D11GeometryShader*      g_pSceneGeometryShader = NULL;
 ID3D11PixelShader*         g_pScenePixelShader1 = NULL;
 ID3D11PixelShader*         g_pScenePixelShader2 = NULL;
 ID3D11PixelShader*         g_pScenePixelShader3 = NULL;
+ID3D11PixelShader*         g_pScenePixelShader4 = NULL;
 ID3D11InputLayout*         g_pSceneVertexLayout = NULL;
 ID3D11PixelShader*         g_pSceneDepthPixelShader = NULL;
 ID3D11VertexShader*        g_pVisVertexShader = NULL;
-ID3D11PixelShader*         g_pVisPixelShader = NULL;
+ID3D11PixelShader*         g_pVisPixelShader1 = NULL;
+ID3D11PixelShader*         g_pVisPixelShader2 = NULL;
 ID3D11InputLayout*         g_pVisVertexLayout = NULL;
 ID3D11Buffer*              g_pQuadVertexBuffer = NULL;
 ID3D11Buffer*              g_pQuadIndexBuffer = NULL;
@@ -93,7 +95,7 @@ ID3D11UnorderedAccessView* g_pLiveStatsUAV = NULL;
 ID3D11ShaderResourceView*  g_pLiveStatsSRV = NULL;
 
 DWORD                      g_Method    = 0;
-DWORD                      g_NbMethods = 3;
+const DWORD                g_NbMethods = 4;
 
 CDXUTSDKMesh g_Mesh;
 CModelViewerCamera g_Camera;
@@ -434,6 +436,14 @@ HRESULT InitDevice()
     if (FAILED(hr))
         return hr;
 
+    hr = CompileShaderFromFile(L"QuadShading.fx", "ScenePS4", "ps_5_0", &pPSBlob);
+    if (FAILED(hr))
+        return hr;
+    hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), NULL, &g_pScenePixelShader4);
+    pPSBlob->Release();
+    if (FAILED(hr))
+        return hr;
+
     hr = CompileShaderFromFile(L"QuadShading.fx", "SceneDepthPS", "ps_5_0", &pPSBlob);
     if (FAILED(hr))
         return hr;
@@ -458,10 +468,18 @@ HRESULT InitDevice()
     if (FAILED(hr))
         return hr;
 
-    hr = CompileShaderFromFile(L"QuadShading.fx", "VisPS", "ps_5_0", &pPSBlob);
+    hr = CompileShaderFromFile(L"QuadShading.fx", "VisPS1", "ps_5_0", &pPSBlob);
     if (FAILED(hr))
         return hr;
-    hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), NULL, &g_pVisPixelShader);
+    hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), NULL, &g_pVisPixelShader1);
+    pPSBlob->Release();
+    if (FAILED(hr))
+        return hr;
+
+    hr = CompileShaderFromFile(L"QuadShading.fx", "VisPS2", "ps_5_0", &pPSBlob);
+    if (FAILED(hr))
+        return hr;
+    hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), NULL, &g_pVisPixelShader2);
     pPSBlob->Release();
     if (FAILED(hr))
         return hr;
@@ -530,20 +548,29 @@ HRESULT InitDevice()
     descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     descSRV.Texture2D.MipLevels = 1;
     descSRV.Texture2D.MostDetailedMip = 0;
-    g_pd3dDevice->CreateShaderResourceView(g_pLockBuffer, &descSRV, &g_pLockSRV);
-
+    g_pd3dDevice->CreateShaderResourceView (g_pLockBuffer, &descSRV, &g_pLockSRV);
     descUAV.Format = desc2D.Format;
     descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
     descUAV.Texture2D.MipSlice = 0;
     g_pd3dDevice->CreateUnorderedAccessView(g_pLockBuffer, &descUAV, &g_pLockUAV);
 
-    g_pd3dDevice->CreateTexture2D(&desc2D, NULL, &g_pOverdrawBuffer);
-    g_pd3dDevice->CreateShaderResourceView (g_pOverdrawBuffer, &descSRV, &g_pOverdrawSRV);
-    g_pd3dDevice->CreateUnorderedAccessView(g_pOverdrawBuffer, &descUAV, &g_pOverdrawUAV);
-
     g_pd3dDevice->CreateTexture2D(&desc2D, NULL, &g_pLiveCountBuffer);
     g_pd3dDevice->CreateShaderResourceView (g_pLiveCountBuffer, &descSRV, &g_pLiveCountSRV);
     g_pd3dDevice->CreateUnorderedAccessView(g_pLiveCountBuffer, &descUAV, &g_pLiveCountUAV);
+
+    desc2D.ArraySize = 4;
+    g_pd3dDevice->CreateTexture2D(&desc2D, NULL, &g_pOverdrawBuffer);
+    descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+    descSRV.Texture2DArray.ArraySize = 4;
+    descSRV.Texture2DArray.FirstArraySlice = 0;
+    descSRV.Texture2DArray.MipLevels = 1;
+    descSRV.Texture2DArray.MostDetailedMip = 0;
+    g_pd3dDevice->CreateShaderResourceView (g_pOverdrawBuffer, &descSRV, &g_pOverdrawSRV);
+    descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+    descUAV.Texture2DArray.ArraySize = 4;
+    descUAV.Texture2DArray.FirstArraySlice = 0;
+    descUAV.Texture2DArray.MipSlice = 0;
+    g_pd3dDevice->CreateUnorderedAccessView(g_pOverdrawBuffer, &descUAV, &g_pOverdrawUAV);
 
     DWORD statsWidth = 4;
 
@@ -642,10 +669,12 @@ void CleanupDevice()
     if (g_pScenePixelShader1) g_pScenePixelShader1->Release();
     if (g_pScenePixelShader2) g_pScenePixelShader2->Release();
     if (g_pScenePixelShader3) g_pScenePixelShader3->Release();
+    if (g_pScenePixelShader4) g_pScenePixelShader4->Release();
     if (g_pSceneVertexLayout) g_pSceneVertexLayout->Release();
     if (g_pSceneDepthPixelShader) g_pSceneDepthPixelShader->Release();
     if (g_pVisVertexShader) g_pVisVertexShader->Release();
-    if (g_pVisPixelShader) g_pVisPixelShader->Release();
+    if (g_pVisPixelShader1) g_pVisPixelShader1->Release();
+    if (g_pVisPixelShader2) g_pVisPixelShader2->Release();
     if (g_pVisVertexLayout) g_pVisVertexLayout->Release();
     if (g_pDepthStencil) g_pDepthStencil->Release();
     if (g_pDepthStencilView) g_pDepthStencilView->Release();
@@ -843,8 +872,14 @@ void Render()
         RenderMesh(g_pImmediateContext, &g_Mesh, i, 2);
 
     // Fragments pass
-    ID3D11PixelShader* ps[] = {g_pScenePixelShader1, g_pScenePixelShader2, g_pScenePixelShader3};
-    g_pImmediateContext->PSSetShader(ps[g_Method], NULL, 0);
+    ID3D11PixelShader* psScene[g_NbMethods] =
+    {
+        g_pScenePixelShader1,
+        g_pScenePixelShader2,
+        g_pScenePixelShader3,
+        g_pScenePixelShader4
+    };
+    g_pImmediateContext->PSSetShader(psScene[g_Method], NULL, 0);
     g_pImmediateContext->PSSetShaderResources(0, 1, &g_pDummySRV);
     g_pImmediateContext->PSSetShaderResources(1, 1, &g_pDummySRV);
 
@@ -873,7 +908,7 @@ void Render()
     g_pImmediateContext->IASetInputLayout(g_pVisVertexLayout);
 
     g_pImmediateContext->VSSetShader(g_pVisVertexShader, NULL, 0);
-    g_pImmediateContext->PSSetShader(g_pVisPixelShader,  NULL, 0);
+    g_pImmediateContext->PSSetShader(g_Method < 3 ? g_pVisPixelShader1 : g_pVisPixelShader2, NULL, 0);
 
     g_pImmediateContext->PSSetShaderResources(0, 1, &g_pOverdrawSRV);
     g_pImmediateContext->PSSetShaderResources(1, 1, &g_pLiveStatsSRV);

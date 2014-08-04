@@ -5,13 +5,13 @@
 // Copyright (c) 2014 Stephen Hill
 //--------------------------------------------------------------------------------------
 
-RWTexture2D<uint> lockUAV      : register(u0);
-RWTexture2D<uint> overdrawUAV  : register(u1);
-RWTexture2D<uint> liveCountUAV : register(u2);
-RWTexture1D<uint> liveStatsUAV : register(u3);
+RWTexture2D<uint>      lockUAV      : register(u0);
+RWTexture2DArray<uint> overdrawUAV  : register(u1);
+RWTexture2D<uint>      liveCountUAV : register(u2);
+RWTexture1D<uint>      liveStatsUAV : register(u3);
 
-Texture2D<uint>   overdrawSRV  : register(t0);
-Texture1D<uint>   liveStatsSRV : register(t1);
+Texture2DArray<uint> overdrawSRV  : register(t0);
+Texture1D<uint>      liveStatsSRV : register(t1);
 
 
 //--------------------------------------------------------------------------------------
@@ -113,7 +113,7 @@ void ScenePS1(float4 vpos : SV_Position, uint id : SV_PrimitiveID)
 
     if (lockCount)
     {
-        InterlockedAdd(overdrawUAV[quad], 1);
+        InterlockedAdd(overdrawUAV[uint3(quad, 0)], 1);
         InterlockedAdd(liveStatsUAV[pixelCount], 1);
     }
 }
@@ -160,7 +160,7 @@ void ScenePS2(float4 vpos : SV_Position, uint unused : SV_PrimitiveID, float2 c0
     if (firstAlive)
     {
         uint2 quad = vpos.xy*0.5;
-        InterlockedAdd(overdrawUAV[quad], 1);
+        InterlockedAdd(overdrawUAV[uint3(quad, 0)], 1);
 
         uint pixelCount = countbits(bitmask) - 1;
         InterlockedAdd(liveStatsUAV[pixelCount], 1);
@@ -200,12 +200,33 @@ void ScenePS3(float4 vpos : SV_Position, uint c0 : SV_Coverage)
     // 'liveness' stats (number of quads with 1-4 live pixels)
     if (firstAlive)
     {
-        uint2 quad = vpos.xy*0.5;
+        uint3 quad = uint3(vpos.xy*0.5, 0);
         InterlockedAdd(overdrawUAV[quad], 1);
 
         uint pixelCount = countbits(bitmask) - 1;
         InterlockedAdd(liveStatsUAV[pixelCount], 1);
     }
+}
+
+//--------------------------------------------------------------------------------------
+[earlydepthstencil]
+void ScenePS4(float4 vpos : SV_Position, uint c0 : SV_Coverage)
+{
+    // Obtain coverage for all pixels in the quad.
+    // This uses quad 'message passing'. For more details, see:
+    // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.
+    uint2 p = uint2(vpos.xy) & 1;
+    int2 sign = p ? -1 : 1;
+    uint c1 = c0 + sign.x*ddx_fine(c0);
+    uint c2 = c0 + sign.y*ddy_fine(c0);
+    uint c3 = c2 + sign.x*ddx_fine(c2);
+
+    // Count the live pixels, minus 1 (zero indexing)
+    uint pixelCount = c0 + c1 + c2 + c3 - 1;
+
+    uint3 quad = uint3(vpos.xy*0.5, pixelCount);
+    InterlockedAdd(overdrawUAV[quad], 1);
+    InterlockedAdd(liveStatsUAV[pixelCount], 1);
 }
 
 
@@ -236,12 +257,12 @@ float4 ToColour(uint v)
     return colours[min(v, nbColours - 1)]/255.0;
 }
 
-float4 PieChart(float2 quad)
+float4 PieChart(float2 quad, uint4 liveStats)
 {
-    float t4 = liveStatsSRV[3];
-    float t3 = liveStatsSRV[2] + t4;
-    float t2 = liveStatsSRV[1] + t3;
-    float t1 = liveStatsSRV[0] + t2;
+    float t4 = liveStats[3];
+    float t3 = liveStats[2] + t4;
+    float t2 = liveStats[1] + t3;
+    float t1 = liveStats[0] + t2;
 
     float4 colour = 0;
 
@@ -259,17 +280,45 @@ float4 PieChart(float2 quad)
     return colour;
 }
 
-float4 VisPS(float4 vpos : SV_POSITION) : SV_Target
+float4 VisPS1(float4 vpos : SV_POSITION) : SV_Target
 {
     uint2 quad = vpos.xy*0.5;
 
-    uint overdraw = overdrawSRV[quad];
+    uint overdraw = overdrawSRV[uint3(quad, 0)];
     float4 colour = ToColour(overdraw);
 
-    colour += PieChart(vpos.xy + float2(0.0, 0.0))*0.25;
-    colour += PieChart(vpos.xy + float2(0.5, 0.0))*0.25;
-    colour += PieChart(vpos.xy + float2(0.0, 0.5))*0.25;
-    colour += PieChart(vpos.xy + float2(0.5, 0.5))*0.25;
+    uint4 liveStats = {
+        liveStatsSRV[0], liveStatsSRV[1], liveStatsSRV[2], liveStatsSRV[3]
+    };
+
+    colour += PieChart(vpos.xy + float2(0.0, 0.0), liveStats)*0.25;
+    colour += PieChart(vpos.xy + float2(0.5, 0.0), liveStats)*0.25;
+    colour += PieChart(vpos.xy + float2(0.0, 0.5), liveStats)*0.25;
+    colour += PieChart(vpos.xy + float2(0.5, 0.5), liveStats)*0.25;
+
+    return colour;
+}
+
+
+//--------------------------------------------------------------------------------------
+float4 VisPS2(float4 vpos : SV_POSITION) : SV_Target
+{
+    uint2 quad = vpos.xy*0.5;
+
+    uint  overdraw = 0;
+    uint4 liveStats;
+    for (int i = 0; i < 4; i++)
+    {
+        liveStats[i] = liveStatsSRV[i]/(i + 1);
+        overdraw += overdrawSRV[uint3(quad, i)]/(i + 1);
+    }
+
+    float4 colour = ToColour(overdraw);
+
+    colour += PieChart(vpos.xy + float2(0.0, 0.0), liveStats)*0.25;
+    colour += PieChart(vpos.xy + float2(0.5, 0.0), liveStats)*0.25;
+    colour += PieChart(vpos.xy + float2(0.0, 0.5), liveStats)*0.25;
+    colour += PieChart(vpos.xy + float2(0.5, 0.5), liveStats)*0.25;
 
     return colour;
 }
