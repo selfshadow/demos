@@ -38,8 +38,8 @@ struct GSINPUT
 struct PSINPUT
 {
     float4 cpos : SV_POSITION;
-    float2 col  : TEXCOORD0;
     uint   id   : SV_PrimitiveID;
+    float2 col  : TEXCOORD0;
 };
 
 
@@ -75,7 +75,7 @@ void SceneDepthPS(PSINPUT input)
 
 //--------------------------------------------------------------------------------------
 [earlydepthstencil]
-void ScenePS1(float4 vpos : SV_Position, float2 unused : TEXCOORD0, uint id : SV_PrimitiveID)
+void ScenePS1(float4 vpos : SV_Position, uint id : SV_PrimitiveID)
 {
     uint2 quad = vpos.xy*0.5;
     uint  prevID;
@@ -125,7 +125,7 @@ bool InsideTri(float2 c)
 }
 
 [earlydepthstencil]
-void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0)
+void ScenePS2(float4 vpos : SV_Position, uint unused : SV_PrimitiveID, float2 c0 : TEXCOORD0)
 {
     // Lowest bit of the x and y coordinates, used to adjust the the direction of
     // derivatives and assign the pixel an index within the quad
@@ -169,7 +169,7 @@ void ScenePS2(float4 vpos : SV_Position, float2 c0 : TEXCOORD0)
 
 //--------------------------------------------------------------------------------------
 [earlydepthstencil]
-void ScenePS3(float4 vpos : SV_Position, float2 unused : TEXCOORD0, uint c0 : SV_Coverage)
+void ScenePS3(float4 vpos : SV_Position, uint c0 : SV_Coverage)
 {
     // Lowest bit of the x and y coordinates, used to adjust the the direction of
     // derivatives and assign the pixel an index within the quad
