@@ -37,9 +37,9 @@ struct GSINPUT
 
 struct PSINPUT
 {
-    float4 cpos : SV_POSITION;
-    uint   id   : SV_PrimitiveID;
-    float3 col  : TEXCOORD0;
+    float4 cpos   : SV_POSITION;
+    uint   id     : SV_PrimitiveID;
+    float3 coords : TEXCOORD0;
 };
 
 
@@ -62,9 +62,9 @@ void SceneGS(triangle GSINPUT input[3], inout TriangleStream<PSINPUT> output,
 {
     PSINPUT p;
     p.id   = id;
-    p.cpos = input[0].cpos; p.col = float3(1, 0, 0); output.Append(p);
-    p.cpos = input[1].cpos; p.col = float3(0, 1, 0); output.Append(p);
-    p.cpos = input[2].cpos; p.col = float3(0, 0, 1); output.Append(p);
+    p.cpos = input[0].cpos; p.coords = float3(1, 0, 0); output.Append(p);
+    p.cpos = input[1].cpos; p.coords = float3(0, 1, 0); output.Append(p);
+    p.cpos = input[2].cpos; p.coords = float3(0, 0, 1); output.Append(p);
     output.RestartStrip();
 }
 
@@ -120,29 +120,29 @@ void ScenePS1(float4 vpos : SV_Position, uint id : SV_PrimitiveID)
 
 //--------------------------------------------------------------------------------------
 [earlydepthstencil]
-void ScenePS2(float4 vpos : SV_Position, uint unused : SV_PrimitiveID, float3 c0 : TEXCOORD0)
+void ScenePS2(float4 vpos : SV_Position, uint unused : SV_PrimitiveID, float3 coords : TEXCOORD0)
 {
     // Lowest bit of the x and y coordinates, used to adjust the the direction of
     // derivatives and assign the pixel an index within the quad
-    uint2 p = uint2(vpos.xy) & 1;
+    uint2 pos = uint2(vpos.xy) & 1;
 
     // Perform triangle inclusion test for the pixel
-    bool i0 = all(c0 >= 0);
+    bool i0 = all(coords >= 0);
 
     // Assign an index within the quad:
     // 0 1
     // 2 3
-    uint index = p.x + (p.y << 1);
+    uint index = pos.x + (pos.y << 1);
 
     // Form a bit mask
     uint b0 = i0 << index;
 
     // Retrieve test results for other pixels in the quad. For more details, see:
     // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.
-    int2 sign = p ? -1 : 1;
-    uint b1 = b0 + sign.x*ddx_fine(b0);
-    uint b2 = b0 + sign.y*ddy_fine(b0);
-    uint b3 = b2 + sign.x*ddx_fine(b2);
+    int2 dir = pos ? -1 : 1;
+    uint b1 = b0 + dir.x*ddx_fine(b0);
+    uint b2 = b0 + dir.y*ddy_fine(b0);
+    uint b3 = b2 + dir.x*ddx_fine(b2);
 
     // Combine the results
     uint bitmask = b0 | b1 | b2 | b3;
@@ -168,22 +168,22 @@ void ScenePS3(float4 vpos : SV_Position, uint c0 : SV_Coverage)
 {
     // Lowest bit of the x and y coordinates, used to adjust the the direction of
     // derivatives and assign the pixel an index within the quad
-    uint2 p = uint2(vpos.xy) & 1;
+    uint2 pos = uint2(vpos.xy) & 1;
 
     // Assign an index within the quad:
     // 0 1
     // 2 3
-    uint index = p.x + (p.y << 1);
+    uint index = pos.x + (pos.y << 1);
 
     // Store the coverage in the appropriate bit
     uint b0 = c0 << index;
 
     // Retrieve test results for other pixels in the quad. For more details, see:
     // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.
-    int2 sign = p ? -1 : 1;
-    uint b1 = b0 + sign.x*ddx_fine(b0);
-    uint b2 = b0 + sign.y*ddy_fine(b0);
-    uint b3 = b2 + sign.x*ddx_fine(b2);
+    int2 dir = pos ? -1 : 1;
+    uint b1 = b0 + dir.x*ddx_fine(b0);
+    uint b2 = b0 + dir.y*ddy_fine(b0);
+    uint b3 = b2 + dir.x*ddx_fine(b2);
 
     // Combine the coverage results
     uint bitmask = b0 | b1 | b2 | b3;
@@ -210,11 +210,11 @@ void ScenePS4(float4 vpos : SV_Position, uint c0 : SV_Coverage)
     // Obtain coverage for all pixels in the quad.
     // This uses quad 'message passing'. For more details, see:
     // "Shader Amortization using Pixel Quad Message Passing", Eric Penner, GPU Pro 2.
-    uint2 p = uint2(vpos.xy) & 1;
-    int2 sign = p ? -1 : 1;
-    uint c1 = c0 + sign.x*ddx_fine(c0);
-    uint c2 = c0 + sign.y*ddy_fine(c0);
-    uint c3 = c2 + sign.x*ddx_fine(c2);
+    uint2 pos = uint2(vpos.xy) & 1;
+    int2  dir = pos ? -1 : 1;
+    uint c1 = c0 + dir.x*ddx_fine(c0);
+    uint c2 = c0 + dir.y*ddy_fine(c0);
+    uint c3 = c2 + dir.x*ddx_fine(c2);
 
     // Count the live pixels, minus 1 (zero indexing)
     uint pixelCount = c0 + c1 + c2 + c3 - 1;
@@ -304,8 +304,8 @@ float4 VisPS2(float4 vpos : SV_POSITION) : SV_Target
     uint4 liveStats;
     for (int i = 0; i < 4; i++)
     {
-        liveStats[i] = liveStatsSRV[i]/(i + 1);
         overdraw += overdrawSRV[uint3(quad, i)]/(i + 1);
+        liveStats[i] = liveStatsSRV[i]/(i + 1);
     }
 
     float4 colour = ToColour(overdraw);
