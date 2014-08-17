@@ -39,7 +39,7 @@ struct PSINPUT
 {
     float4 cpos : SV_POSITION;
     uint   id   : SV_PrimitiveID;
-    float2 col  : TEXCOORD0;
+    float3 col  : TEXCOORD0;
 };
 
 
@@ -62,9 +62,9 @@ void SceneGS(triangle GSINPUT input[3], inout TriangleStream<PSINPUT> output,
 {
     PSINPUT p;
     p.id   = id;
-    p.cpos = input[0].cpos; p.col = float2(1, 0); output.Append(p);
-    p.cpos = input[1].cpos; p.col = float2(0, 1); output.Append(p);
-    p.cpos = input[2].cpos; p.col = float2(0, 0); output.Append(p);
+    p.cpos = input[0].cpos; p.col = float3(1, 0, 0); output.Append(p);
+    p.cpos = input[1].cpos; p.col = float3(0, 1, 0); output.Append(p);
+    p.cpos = input[2].cpos; p.col = float3(0, 0, 1); output.Append(p);
     output.RestartStrip();
 }
 
@@ -119,20 +119,15 @@ void ScenePS1(float4 vpos : SV_Position, uint id : SV_PrimitiveID)
 }
 
 //--------------------------------------------------------------------------------------
-bool InsideTri(float2 c)
-{
-    return c.x >= 0 && c.y >= 0 && (c.x + c.y <= 1);
-}
-
 [earlydepthstencil]
-void ScenePS2(float4 vpos : SV_Position, uint unused : SV_PrimitiveID, float2 c0 : TEXCOORD0)
+void ScenePS2(float4 vpos : SV_Position, uint unused : SV_PrimitiveID, float3 c0 : TEXCOORD0)
 {
     // Lowest bit of the x and y coordinates, used to adjust the the direction of
     // derivatives and assign the pixel an index within the quad
     uint2 p = uint2(vpos.xy) & 1;
 
     // Perform triangle inclusion test for the pixel
-    bool i0 = InsideTri(c0);
+    bool i0 = all(c0 >= 0);
 
     // Assign an index within the quad:
     // 0 1
